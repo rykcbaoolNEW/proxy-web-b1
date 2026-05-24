@@ -5,6 +5,8 @@ export function getFavicon(url) {
   );
 }
 
+
+
 export function rAlert(text) {
   const div = document.createElement("div");
   div.className = "r-alert";

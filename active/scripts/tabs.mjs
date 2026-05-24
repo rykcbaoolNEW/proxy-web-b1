@@ -63,7 +63,7 @@ pageForward.onclick = () => {
 
 pageRefresh.onclick = () => {
   if (selectedTab?.internal) {
-    navigateTab(selectedTab, selectedTab.url);
+    navigateTab(selectedTab, selectedTab.url).then(r => console.log(r.url));
     return;
   }
 
@@ -71,7 +71,7 @@ pageRefresh.onclick = () => {
 };
 
 newTabButton.onclick = () => {
-  addTab(DEFAULT_PAGE_URL);
+  addTab(DEFAULT_PAGE_URL).then(r => console.log("new tab created"));
 };
 
 
@@ -97,7 +97,7 @@ abcOption.onclick = () => {
 
 creditsOption.onclick = () => {
   menuOverlay.classList.remove("active");
-  navigateTab(selectedTab, "rus://credits");
+  navigateTab(selectedTab, "rus://credits").then(r => console.log('opended credits'));
 };
 
 urlForm.onsubmit = async (e) => {
