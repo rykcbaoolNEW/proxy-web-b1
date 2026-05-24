@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Page Not Found</title>
+    <link rel="stylesheet" href="style/global.css?v=icons-safe-3" />
+  </head>
+
+  <body>
+    <main class="error-shell">
+      <section class="error-panel" aria-labelledby="error-title">
+        <div class="error-code">404</div>
+        <h1 id="error-title">Page not found</h1>
+        <p>
+          No matching education resource was found in the active folder for
+          <strong id="missing-url">rus://unknown</strong>.
+        </p>
+        <p class="error-file">
+          Tried <span id="missing-file">unknown.html</span>
+        </p>
+        <div class="error-actions">
+          <button id="home-btn" type="button">Open Resources</button>
+          <button id="retry-btn" type="button">Try Again</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const missingUrl = params.get("url") || "rus://unknown";
+      const missingFile = params.get("file") || "unknown.html";
+
+      document.getElementById("missing-url").textContent = missingUrl;
+      document.getElementById("missing-file").textContent = missingFile;
+
+      function navigate(value) {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "rus:navigate", value }, "*");
+          return;
+        }
+
+        window.location.href = value;
+      }
+
+      document.getElementById("home-btn").onclick = () => {
+        navigate("rus://search");
+      };
+
+      document.getElementById("retry-btn").onclick = () => {
+        navigate(missingUrl);
+      };
+    </script>
+  </body>
+</html>

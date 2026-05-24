@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>math</title>
+    <link rel="stylesheet" href="style/global.css?v=thin-nav-1" />
+    <script>
+      if (window.top === window) {
+        window.location.replace(new URL("index.html", window.location.href));
+      }
+    </script>
+  </head>
+
+  <body class="math-page">
+    <main class="math-shell">
+      <header class="math-hero">
+        <div>
+          <p class="math-eyebrow">LuminSDK</p>
+          <h1>math</h1>
+        </div>
+        <form id="math-search-form" class="math-search">
+          <input
+            id="math-search-input"
+            type="search"
+            placeholder="Search math"
+            autocomplete="off"
+          />
+        </form>
+      </header>
+
+      <section class="math-toolbar" aria-label="Game filters">
+        <div id="math-categories" class="math-categories"></div>
+        <button id="math-random" class="math-action" type="button">
+          Random
+        </button>
+      </section>
+
+      <section class="math-status-row" aria-live="polite">
+        <span id="math-count">Loading catalog</span>
+        <span id="math-page-count"></span>
+      </section>
+
+      <section id="math-grid" class="math-grid" aria-label="math"></section>
+
+      <nav
+        id="math-pagination"
+        class="math-pagination"
+        aria-label="Game pages"
+      ></nav>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js"></script>
+    <script>
+      const PAGE_SIZE = 24;
+      const MAX_PAGE_BUTTONS = 7;
+      
+      const grid = document.getElementById("math-grid");
+      const categories = document.getElementById("math-categories");
+      const pagination = document.getElementById("math-pagination");
+      const countLabel = document.getElementById("math-count");
+      const pageLabel = document.getElementById("math-page-count");
+      const searchForm = document.getElementById("math-search-form");
+      const searchInput = document.getElementById("math-search-input");
+      const randomButton = document.getElementById("math-random");
+    
+      const imageCache = new Map();
+      let currentPage = 1;
+      let currentQuery = "";
+      let currentCategory = "";
+      let latestLoad = 0;
+    
+      function setStatus(message, detail = "") {
+        countLabel.textContent = message;
+        pageLabel.textContent = detail;
+      }
+    
+      function setLoading() {
+        grid.innerHTML = "";
+        for (let i = 0; i < 12; i++) {
+          const item = document.createElement("div");
+          item.className = "game-card game-card-loading";
+          item.innerHTML = "<div></div><span></span>";
+          grid.appendChild(item);
+        }
+      }
+    
+      function showError(message) {
+        grid.innerHTML = "";
+        pagination.innerHTML = "";
+    
+        const panel = document.createElement("div");
+        panel.className = "math-message";
+    
+        const title = document.createElement("h2");
+        title.textContent = "math could not load";
+    
+        const body = document.createElement("p");
+        body.textContent = message;
+    
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = "Retry";
+        retry.onclick = () => loadPage(currentPage);
+    
+        panel.append(title, body, retry);
+        grid.appendChild(panel);
+      }
+    
+      function matchesCategory(game) {
+        if (!currentCategory) return true;
+        return String(game.category || "").toLowerCase() === currentCategory.toLowerCase();
+      }
+    
+      async function resolveImage(game) {
+        if (!game.image_token) return "";
+        if (imageCache.has(game.image_token)) return imageCache.get(game.image_token);
+    
+        const url = await Lumin.getImageUrl(game.image_token);
+        imageCache.set(game.image_token, url);
+        return url;
+      }
+    
+      function gameFallback(game) {
+        const fallback = document.createElement("div");
+        fallback.className = "game-fallback";
+        fallback.textContent = String(game.name || "?").charAt(0).toUpperCase();
+        return fallback;
+      }
+    
+      async function renderGame(game) {
+        const card = document.createElement("button");
+        card.className = "game-card";
+        card.type = "button";
+        card.setAttribute("aria-label", `Play ${game.name}`);
+    
+        const art = document.createElement("div");
+        art.className = "game-art";
+    
+        try {
+          const src = await resolveImage(game);
+          if (src) {
+            const image = document.createElement("img");
+            image.src = src;
+            image.alt = "";
+            image.loading = "lazy";
+            image.onerror = () => {
+              image.remove();
+              art.appendChild(gameFallback(game));
+            };
+            art.appendChild(image);
+          } else {
+            art.appendChild(gameFallback(game));
+          }
+        } catch (error) {
+          art.appendChild(gameFallback(game));
+        }
+    
+        const meta = document.createElement("span");
+        meta.className = "game-meta";
+    
+        const name = document.createElement("strong");
+        name.textContent = game.name || "Untitled";
+    
+        meta.append(name);
+        card.append(art, meta);
+        card.onclick = async () => {
+          card.classList.add("launching");
+          try {
+            await Lumin.loadGame(game.id);
+          } finally {
+            card.classList.remove("launching");
+          }
+        };
+    
+        return card;
+      }
+    
+      function renderCategories(items) {
+        categories.innerHTML = "";
+    
+        const safeItems = Array.isArray(items) ? items : [];
+        const all = ["All", ...safeItems.filter(Boolean)];
+        all.slice(0, 18).forEach((item) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className =
+            "category-chip" +
+            ((item === "All" && !currentCategory) || item === currentCategory
+              ? " active"
+              : "");
+          button.textContent = item;
+          button.onclick = () => {
+            currentCategory = item === "All" ? "" : item;
+            currentPage = 1;
+            renderCategories(items);
+            loadPage(1);
+          };
+          categories.appendChild(button);
+        });
+      }
+    
+      function paginationRange(page, pages) {
+        const half = Math.floor(MAX_PAGE_BUTTONS / 2);
+        const start = Math.max(1, Math.min(page - half, pages - MAX_PAGE_BUTTONS + 1));
+        const end = Math.min(pages, start + MAX_PAGE_BUTTONS - 1);
+        const values = [];
+        for (let i = start; i <= end; i++) values.push(i);
+        return values;
+      }
+    
+      function renderPagination(totalPages) {
+        pagination.innerHTML = "";
+        if (totalPages <= 1) return;
+    
+        const addButton = (label, page, disabled = false, active = false) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "page-chip" + (active ? " active" : "");
+          button.textContent = label;
+          button.disabled = disabled;
+          button.onclick = () => loadPage(page);
+          pagination.appendChild(button);
+        };
+    
+        addButton("Prev", Math.max(1, currentPage - 1), currentPage === 1);
+        paginationRange(currentPage, totalPages).forEach((page) => {
+          addButton(String(page), page, false, page === currentPage);
+        });
+        addButton("Next", Math.min(totalPages, currentPage + 1), currentPage === totalPages);
+      }
+    
+      async function loadPage(page = 1) {
+        const loadId = Date.now();
+        latestLoad = loadId;
+        currentPage = page;
+    
+        setStatus("Loading catalog");
+        setLoading();
+    
+        try {
+          const result = await Lumin.getGames({
+            page,
+            limit: currentCategory ? PAGE_SIZE * 3 : PAGE_SIZE,
+            q: currentQuery,
+          });
+    
+          if (loadId !== latestLoad) return;
+    
+          let math = result.games || []; 
+          if (currentCategory) {
+            math = math.filter(matchesCategory).slice(0, PAGE_SIZE);
+          }
+    
+          grid.innerHTML = "";
+    
+          if (!math.length) {
+            setStatus("No math found");
+            showError("Try another search or category.");
+            return;
+          }
+    
+          const cards = await Promise.all(math.map(renderGame));
+          if (loadId !== latestLoad) return;
+    
+          cards.forEach((card) => grid.appendChild(card));
+    
+          const total = currentCategory ? math.length : result.total || math.length;
+          const pages = currentCategory ? 1 : result.pages || 1;
+          setStatus(`${total.toLocaleString()} math`, `Page ${currentPage} of ${pages}`);
+          renderPagination(pages);
+        } catch (error) {
+          setStatus("Catalog offline");
+          showError(error?.message || "The Lumin catalog is unavailable.");
+        }
+      }
+    
+      async function initMath() {
+        try {
+          setLoading();
+          await Lumin.init({
+            headless: true,
+            onError: (error) => console.error("Lumin error:", error),
+          });
+    
+          const categoryResult = await Lumin.getCategories();
+          const categoryList = Array.isArray(categoryResult?.categories)
+            ? categoryResult.categories
+            : [];
+          renderCategories(categoryList);
+          await loadPage(1);
+        } catch (error) {
+          setStatus("Catalog offline");
+          showError(error?.message || "The Lumin SDK could not start.");
+        }
+      }
+    
+      searchForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        currentQuery = searchInput.value.trim();
+        currentPage = 1;
+        loadPage(1);
+      });
+    
+      let debounce;
+      searchInput.addEventListener("input", () => {
+        clearTimeout(debounce);
+        debounce = setTimeout(() => {
+          currentQuery = searchInput.value.trim();
+          currentPage = 1;
+          loadPage(1);
+        }, 250);
+      });
+    
+      randomButton.onclick = async () => {
+        randomButton.disabled = true;
+        try {
+          setStatus("Choosing math");
+          setLoading();
+          const { games = [] } = await Lumin.getRandomGames(PAGE_SIZE);
+          grid.innerHTML = "";
+          const cards = await Promise.all(games.map(renderGame));
+          cards.forEach((card) => grid.appendChild(card));
+          pagination.innerHTML = "";
+          setStatus(`${games.length} random math`);
+        } catch (error) {
+          setStatus("Catalog offline");
+          showError(error?.message || "Random math is unavailable.");
+        } finally {
+          randomButton.disabled = false;
+        }
+      };
+    
+      initMath();
+    </script>
+  </body>
+</html>

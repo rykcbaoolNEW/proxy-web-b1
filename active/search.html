@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Tab</title>
+    <link rel="stylesheet" href="style/global.css?v=larger-tabs-1" />
+    <script>
+      if (window.top === window) {
+        window.location.replace(new URL("index.html", window.location.href));
+      }
+    </script>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="logo">RUS Math Help</div>
+
+      <form id="search-form">
+        <div class="search-box">
+          <input
+            id="search-input"
+            name="q"
+            placeholder="Browse our math courses"
+            autocomplete="off"
+          />
+        </div>
+      </form>
+
+      <div id="shortcuts" class="shortcuts"></div>
+    </div>
+
+    <div id="modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Add Shortcut</h3>
+        <input id="name-input" placeholder="Name" />
+        <input id="shortcut-url-input" placeholder="https://example.com" />
+        <div class="modal-actions">
+          <button id="save-btn" type="button">Save</button>
+          <button id="delete-btn" class="danger hidden" type="button">Delete</button>
+          <button id="cancel-btn" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById("search-form");
+      const input = document.getElementById("search-input");
+      const shortcutsDiv = document.getElementById("shortcuts");
+
+      const modal = document.getElementById("modal");
+      const nameInput = document.getElementById("name-input");
+      const shortcutUrlInput = document.getElementById("shortcut-url-input");
+      const deleteBtn = document.getElementById("delete-btn");
+
+      const fallbackIcon =
+        "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ffffff' fill-opacity='.16'/%3E%3Cpath d='M20 34h24M32 22v24' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E";
+
+      let editingIndex = null;
+
+      const defaultShortcuts = [
+        { name: "Math", url: "rus://math", icon: "math.svg" },
+        { name: "YouTube", url: "https://inv.nadeko.net", icon: "yt.png" },
+        { name: "GN Math", url: "https://gn-math.dev", icon: "gn.jpg" },
+        { name: "Roblox", url: "https://nowgg.fun", icon: "rblx.png" },
+      ];
+
+      function navigate(value) {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "rus:navigate", value }, "*");
+          return;
+        }
+
+        window.location.href = value;
+      }
+
+      function searchTarget(value) {
+        if (value.toLowerCase().startsWith("rus://")) return value;
+
+        const isURL = /^(https?:\/\/)?([\w-]+\.)+[\w-]+/.test(value);
+        if (isURL) return value.startsWith("http") ? value : "https://" + value;
+        return "https://duckduckgo.com/?q=" + encodeURIComponent(value);
+      }
+
+      function loadShortcuts() {
+        try {
+          const saved = JSON.parse(localStorage.getItem("shortcuts"));
+          if (!saved) return defaultShortcuts;
+
+          const existingUrls = new Set(saved.map((item) => item.url));
+          const missingDefaults = defaultShortcuts.filter(
+            (item) => !existingUrls.has(item.url)
+          );
+
+          if (missingDefaults.length) {
+            const merged = [...missingDefaults, ...saved];
+            saveShortcuts(merged);
+            return merged;
+          }
+
+          return saved;
+        } catch (error) {
+          return defaultShortcuts;
+        }
+      }
+
+      function saveShortcuts(data) {
+        localStorage.setItem("shortcuts", JSON.stringify(data));
+      }
+
+      function iconPath(icon) {
+        if (!icon) return fallbackIcon;
+        if (icon.startsWith("data:") || icon.startsWith("http")) return icon;
+        return "assets/" + icon;
+      }
+
+      function render() {
+        const data = loadShortcuts();
+        shortcutsDiv.innerHTML = "";
+
+        data.forEach((shortcut, index) => {
+          const el = document.createElement("div");
+          el.className = "shortcut";
+
+          const menu = document.createElement("div");
+          menu.className = "menu";
+          menu.textContent = "⋮";
+
+          const icon = document.createElement("div");
+          icon.className = "icon";
+
+          const image = document.createElement("img");
+          image.src = iconPath(shortcut.icon || "default.png");
+          image.alt = "";
+          image.onerror = () => {
+            image.onerror = null;
+            image.src = fallbackIcon;
+          };
+
+          const label = document.createElement("span");
+          label.textContent = shortcut.name;
+
+          icon.appendChild(image);
+          el.append(menu, icon, label);
+
+          el.onclick = (event) => {
+            if (event.target.classList.contains("menu")) return;
+            navigate(shortcut.url);
+          };
+
+          menu.onclick = (event) => {
+            event.stopPropagation();
+            openModal(index);
+          };
+
+          el.oncontextmenu = (event) => {
+            event.preventDefault();
+            openModal(index);
+          };
+
+          shortcutsDiv.appendChild(el);
+        });
+
+        const add = document.createElement("div");
+        add.className = "shortcut";
+        add.innerHTML = '<div class="icon add-tile">+</div><span>Add</span>';
+        add.onclick = () => openModal();
+        shortcutsDiv.appendChild(add);
+      }
+
+      function openModal(index = null) {
+        editingIndex = index;
+
+        if (index !== null) {
+          const shortcut = loadShortcuts()[index];
+          nameInput.value = shortcut.name;
+          shortcutUrlInput.value = shortcut.url;
+          deleteBtn.classList.remove("hidden");
+        } else {
+          nameInput.value = "";
+          shortcutUrlInput.value = "";
+          deleteBtn.classList.add("hidden");
+        }
+
+        modal.classList.remove("hidden");
+      }
+
+      document.getElementById("save-btn").onclick = () => {
+        const data = loadShortcuts();
+        const item = {
+          name: nameInput.value.trim() || "Shortcut",
+          url: shortcutUrlInput.value.trim() || "https://example.com",
+          icon: "default.png",
+        };
+
+        if (editingIndex === null) data.push(item);
+        else data[editingIndex] = item;
+
+        saveShortcuts(data);
+        modal.classList.add("hidden");
+        render();
+      };
+
+      deleteBtn.onclick = () => {
+        const data = loadShortcuts();
+        data.splice(editingIndex, 1);
+        saveShortcuts(data);
+        modal.classList.add("hidden");
+        render();
+      };
+
+      document.getElementById("cancel-btn").onclick = () => {
+        modal.classList.add("hidden");
+      };
+
+      modal.addEventListener("click", (event) => {
+        if (event.target === modal) modal.classList.add("hidden");
+      });
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const value = input.value.trim();
+        if (!value) return;
+        navigate(searchTarget(value));
+      });
+
+      render();
+    </script>
+  </body>
+</html>

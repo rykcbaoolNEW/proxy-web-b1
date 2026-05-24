@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Credits</title>
+    <link rel="stylesheet" href="style/global.css?v=icons-safe-4" />
+    <script>
+      if (window.top === window) {
+        window.location.replace(new URL("index.html", window.location.href));
+      }
+    </script>
+  </head>
+
+  <body class="credits-page">
+    <main class="credits-shell">
+      <section class="credits-panel">
+        <img class="credits-icon" src="assets/credits.svg" alt="" />
+        <p class="credits-eyebrow">About</p>
+        <h1>Credits</h1>
+        <p>
+          The math page uses
+          <a href="https://luminsdk.com/" target="_blank" rel="noreferrer">
+            Lumin SDK
+          </a>
+          to load and display the education catalog.
+        </p>
+        <p>
+          Images, icons, and thumbnails were sourced from the Internet.
+        </p>
+        <button id="credits-home" type="button">Back to our educational resources</button>
+      </section>
+    </main>
+
+    <script>
+      document.getElementById("credits-home").onclick = () => {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "rus:navigate", value: "rus://search" }, "*");
+          return;
+        }
+
+        window.location.href = "search.html";
+      };
+    </script>
+  </body>
+</html>
